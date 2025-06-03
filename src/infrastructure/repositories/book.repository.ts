@@ -4,6 +4,7 @@ import { Repository } from "typeorm";
 import { BookEntity } from "../database/book.entity";
 import { BookMapper } from "../mappers/book.mapper";
 import { InjectRepository } from "@nestjs/typeorm";
+import { Book } from "src/domain/entities/book.entity";
 
 
 @Injectable()

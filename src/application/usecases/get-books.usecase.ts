@@ -1,8 +1,9 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { IBookRepository } from "../interfaces/book-repository";
+import { UseCase } from "../interfaces/usecase";
 
 @Injectable()
-export class GetBooksUseCase {
+export class GetBooksUseCase{
   constructor(@Inject('BookRepository') private bookRepository: IBookRepository) {}
 
   async execute(): Promise<any[]> {

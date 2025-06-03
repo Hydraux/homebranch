@@ -1,3 +1,4 @@
+import { Book } from "src/domain/entities/book.entity";
 import { BookEntity } from "../database/book.entity";
 
 export class BookMapper {

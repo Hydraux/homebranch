@@ -1,0 +1,34 @@
+GET http://localhost:3000/books
+
+###
+
+POST http://localhost:3000/books
+Content-Type: application/json
+
+{
+  "title": "The Great Gatsby",
+  "author": "F. Scott Fitzgerald",
+  "publishedYear": 1925,
+  "genre": "Fiction"
+}
+
+###
+
+DELETE http://localhost:3000/books
+Content-Type: application/json
+
+{
+  "id": "5771f5cd-fb49-4d41-827d-05c5ee22582a"
+}
+
+###
+
+POST http://localhost:3000/books/d9b0bbf5-155f-41c0-aa40-03da01ea1e9e
+Content-Type: application/json
+
+{
+  "title": "The Great Gatsby - Updated",
+  "author": "F. Scott Fitzgerald",
+  "publishedYear": 1925,
+  "genre": "Fiction"
+}

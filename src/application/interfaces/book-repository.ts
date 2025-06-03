@@ -1,3 +1,4 @@
+import { Book } from "src/domain/entities/book.entity";
 import { IRepository } from "./repository";
 
 export interface IBookRepository extends IRepository<Book> {
