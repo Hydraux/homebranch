@@ -7,11 +7,13 @@ import { DeleteBookUseCase } from "src/application/usecases/delete-book.usecase"
 import { GetBooksUseCase } from "src/application/usecases/get-books.usecase";
 import { UpdateBookUseCase } from "src/application/usecases/update-book.usecase";
 import { UpdateBookDto } from "../dtos/update-book.dto";
+import { GetBookByIdUseCase } from "src/application/usecases/get-book-by-id.usecase";
 
 @Controller('books')
 export class BookController {
     constructor(
         private readonly getBooksUseCase: GetBooksUseCase,
+        private readonly getBookByIdUseCase: GetBookByIdUseCase,
         private readonly createBookUseCase: CreateBookUseCase,
         private readonly deleteBookUseCase: DeleteBookUseCase,
         private readonly updateBookUseCase: UpdateBookUseCase,
@@ -21,6 +23,12 @@ export class BookController {
     getBooks() {
         return this.getBooksUseCase.execute();
     }
+
+    @Get(`:id`)
+    getBookById(@Param('id') id: string) {
+        return this.getBookByIdUseCase.execute(id);
+    }
+
 
     @Post()
     createBook(@Body() createBookRequest: CreateBookRequest) {

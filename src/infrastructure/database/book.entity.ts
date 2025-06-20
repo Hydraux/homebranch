@@ -11,9 +11,9 @@ export class BookEntity {
     @Column()
     author: string;
 
-    @Column({ name: 'published_year' })
-    publishedYear: number;
+    @Column({ name: 'published_year', nullable: true })
+    publishedYear?: number;
 
-    @Column()
-    genre: string;
+    @Column({nullable: true })
+    genre?: string;
 }

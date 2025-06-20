@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CreateBookUseCase } from 'src/application/usecases/create-book.usecase';
 import { DeleteBookUseCase } from 'src/application/usecases/delete-book.usecase';
+import { GetBookByIdUseCase } from 'src/application/usecases/get-book-by-id.usecase';
 import { GetBooksUseCase } from 'src/application/usecases/get-books.usecase';
 import { UpdateBookUseCase } from 'src/application/usecases/update-book.usecase';
 import { BookEntity } from 'src/infrastructure/database/book.entity';
@@ -23,6 +24,7 @@ import { BookController } from 'src/presentation/controllers/book.controller';
     CreateBookUseCase,
     DeleteBookUseCase,
     GetBooksUseCase,
+    GetBookByIdUseCase,
     UpdateBookUseCase,
     // ... other use cases
     
