@@ -1,22 +1,16 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { IBookRepository } from '../interfaces/book-repository';
-import { Book } from 'src/domain/entities/book.entity';
 
 @Injectable()
-export class GetBookByIdUseCase {
+export class GetFavoritedBooksUseCase {
   constructor(
     @Inject('BookRepository') private bookRepository: IBookRepository,
   ) {}
 
-  async execute(id: string): Promise<Book> {
+  async execute(): Promise<any[]> {
     try {
-      const book = await this.bookRepository.findById(id); // TODO: This could be improved to only find a single book
-
-      if (!book) {
-        throw new Error(`Book with id ${id} not found`);
-      }
-
-      return book;
+      const books = await this.bookRepository.findFavorited();
+      return books;
     } catch (error) {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       throw new Error('Error fetching books: ' + error.message);

@@ -54,3 +54,11 @@ pids
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+uploads/books/0bfc128c-88db-4258-aaa2-85bf607cac46.epub
+uploads/books/723f9fac-33a9-4bf6-bb8b-1f8cdba945f5.epub
+uploads/books/d63a9540-7bbb-408f-98c1-e899e2f7a63d.epub
+uploads/cover-images/07c14c6a-8b0d-408e-89b8-80c3da59d8eb.jpg
+uploads/cover-images/870c28dc-e832-46e8-a89a-2161e12690ba.jpg
+uploads/cover-images/2010d8e0-0ecf-4dd0-b877-a885e8a50e70.jpg
+test/book.rest
+test/book.rest

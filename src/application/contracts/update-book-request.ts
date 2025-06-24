@@ -1,7 +1,6 @@
 export interface UpdateBookRequest {
-    id: string;
-    title?: string;
-    author?: string;
-    publishedYear?: number;
-    genre?: string;
+  id: string;
+  title?: string;
+  author?: string;
+  publishedYear?: number;
 }
