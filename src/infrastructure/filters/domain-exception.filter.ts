@@ -1,13 +1,19 @@
 // infrastructure/filters/domain-exception.filter.ts
-import { 
-  ExceptionFilter, 
-  Catch, 
-  ArgumentsHost, 
+import {
+  ExceptionFilter,
+  Catch,
+  ArgumentsHost,
   HttpStatus,
-  Logger 
+  Logger,
 } from '@nestjs/common';
 import { Response } from 'express';
-import { InvalidCredentialsError, InvalidTokenError, RefreshTokenRevokedError, TokenExpiredError } from 'src/domain/exceptions/auth.exceptions';
+import {
+  InvalidCredentialsError,
+  InvalidTokenError,
+  RefreshTokenRevokedError,
+  TokenExpiredError,
+} from 'src/domain/exceptions/auth.exceptions';
+import { BookNotFoundError } from 'src/domain/exceptions/book.exceptions';
 
 @Catch()
 export class DomainExceptionFilter implements ExceptionFilter {
@@ -16,7 +22,7 @@ export class DomainExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
-    const request = ctx.getRequest();
+    const request = ctx.getRequest<Request>();
 
     let status: HttpStatus;
     let message: string;
@@ -39,17 +45,21 @@ export class DomainExceptionFilter implements ExceptionFilter {
       status = HttpStatus.UNAUTHORIZED;
       message = exception.message;
       code = 'REFRESH_TOKEN_REVOKED';
+    } else if (exception instanceof BookNotFoundError) {
+      status = HttpStatus.NOT_FOUND;
+      message = exception.message;
+      code = 'BOOK_NOT_FOUND';
     } else if (exception instanceof Error) {
       // Generic error handling
       status = HttpStatus.INTERNAL_SERVER_ERROR;
       message = 'Internal server error';
       code = 'INTERNAL_ERROR';
-      
+
       // Log unexpected errors
       this.logger.error(
         `Unexpected error: ${exception.message}`,
         exception.stack,
-        { url: request.url, method: request.method }
+        { url: request.url, method: request.method },
       );
     } else {
       status = HttpStatus.INTERNAL_SERVER_ERROR;

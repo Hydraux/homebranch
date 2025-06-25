@@ -5,6 +5,9 @@ import { BookEntity } from '../database/book.entity';
 import { BookMapper } from '../mappers/book.mapper';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Book } from 'src/domain/entities/book.entity';
+import { existsSync, unlinkSync } from 'fs';
+import { join } from 'path';
+import { BookNotFoundError } from 'src/domain/exceptions/book.exceptions';
 
 @Injectable()
 export class TypeOrmBookRepository implements IBookRepository {
@@ -41,6 +44,28 @@ export class TypeOrmBookRepository implements IBookRepository {
   }
 
   async delete(id: string): Promise<void> {
+    const book = await this.findById(id);
+    if (!book) {
+      throw new BookNotFoundError();
+    }
+    if (
+      existsSync(
+        `${process.env.UPLOADS_DIRECTORY || join(process.cwd(), 'uploads')}/books/${book.fileName}`,
+      )
+    ) {
+      unlinkSync(
+        `${process.env.UPLOADS_DIRECTORY || join(process.cwd(), 'uploads')}/books/${book.fileName}`,
+      );
+    }
+    if (
+      existsSync(
+        `${process.env.UPLOADS_DIRECTORY || join(process.cwd(), 'uploads')}/cover-images/${book.coverImageFileName}`,
+      )
+    ) {
+      unlinkSync(
+        `${process.env.UPLOADS_DIRECTORY || join(process.cwd(), 'uploads')}/cover-images/${book.coverImageFileName}`,
+      );
+    }
     await this.repository.delete(id);
     return;
   }

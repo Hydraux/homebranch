@@ -9,7 +9,6 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { CreateBookRequest } from 'src/application/contracts/create-book-request';
-import { DeleteBookRequest } from 'src/application/contracts/delete-book-request';
 import { UpdateBookRequest } from 'src/application/contracts/update-book-request';
 import { CreateBookUseCase } from 'src/application/usecases/create-book.usecase';
 import { DeleteBookUseCase } from 'src/application/usecases/delete-book.usecase';
@@ -21,6 +20,7 @@ import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { randomUUID } from 'crypto';
 import { join } from 'path';
+import { DeleteBookRequest } from 'src/application/contracts/delete-book-request';
 
 @Controller('books')
 export class BookController {
@@ -117,9 +117,12 @@ export class BookController {
     return this.createBookUseCase.execute(request);
   }
 
-  @Delete()
-  deleteBook(@Body() deleteBookDto: DeleteBookRequest) {
-    return this.deleteBookUseCase.execute(deleteBookDto);
+  @Delete(`:id`)
+  deleteBook(@Param('id') id: string) {
+    const deleteBookRequest: DeleteBookRequest = {
+      id,
+    };
+    return this.deleteBookUseCase.execute(deleteBookRequest);
   }
 
   @Post(`:id`)

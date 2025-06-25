@@ -1,3 +1,3 @@
 export interface DeleteBookRequest {
-    id: string;
+  id: string;
 }
