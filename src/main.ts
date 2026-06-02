@@ -1,7 +1,7 @@
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from 'src/app.module';
-import { DomainExceptionFilter } from 'src/presentation/filters/domain-exception.filter';
+import { DomainExceptionFilter } from 'src/common/filters/domain-exception.filter';
 import { existsSync, mkdirSync } from 'fs';
 import { join, resolve } from 'path';
 import * as express from 'express';
