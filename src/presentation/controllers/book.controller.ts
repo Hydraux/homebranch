@@ -314,7 +314,7 @@ export class BookController {
     return result.value;
   }
 
-  @Get(':id/content/*')
+  @Get(':id/content/*entryPath')
   @UseGuards(JwtAuthGuard)
   async getBookContent(
     @Param('id') id: string,
@@ -325,6 +325,7 @@ export class BookController {
     // Extract the entry path from the URL, after /content/
     const rawPath = req.url.split(`/content/`)[1]?.split('?')[0] ?? '';
     const entryPath = rawPath.split('/').map(decodeURIComponent).join('/');
+
 
     const result = await this.getBookContentUseCase.execute({ id, entryPath, format: query.format });
 
