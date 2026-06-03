@@ -1,4 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
+import { join } from 'path';
 import { LibrarySyncService } from 'src/modules/library-sync/library-sync.service';
 import { BookPersistenceService } from 'src/modules/book/persistence/book.persistence';
 import { mockBook } from 'test/mocks/bookMocks';
@@ -31,7 +32,7 @@ describe('LibrarySyncService', () => {
     libraryScanQueue.enqueueScan.mockResolvedValueOnce({ jobId: 'scan-1' });
 
     await expect(service.triggerScan()).resolves.toEqual({ jobId: 'scan-1' });
-    expect(libraryScanQueue.enqueueScan).toHaveBeenCalledWith('C:\\library\\books');
+    expect(libraryScanQueue.enqueueScan).toHaveBeenCalledWith(join('C:\\library', 'books'));
   });
 
   test('enqueues a manual metadata sync with the book file details', async () => {
@@ -42,7 +43,7 @@ describe('LibrarySyncService', () => {
     expect(fileProcessingQueue.enqueueMetadataSync).toHaveBeenCalledWith(
       mockBook.id,
       mockBook.fileName,
-      `C:\\library\\books\\${mockBook.fileName}`,
+      join('C:\\library', 'books', mockBook.fileName),
       { jobId: `sync-${mockBook.id}-manual` },
     );
   });
