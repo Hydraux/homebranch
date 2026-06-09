@@ -201,12 +201,12 @@ export class EpubManifestService {
     const olContent = html.match(/<ol[^>]*>([\s\S]*)<\/ol>/i)?.[1] ?? '';
     const liMatches = this.extractTopLevelLi(olContent);
     for (const liContent of liMatches) {
-      const anchor = /<a[^>]+href="([^"#]+(?:#[^"]*)?)"[^>]*>([\s\S]*?)<\/a>/i.exec(liContent);
+      const anchor = /<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i.exec(liContent);
       if (!anchor) continue;
       const rawHref = anchor[1];
       const title = anchor[2].replace(/<[^>]+>/g, '').trim();
       const resolvedHref = rawHref.startsWith('http') ? rawHref : makeUrl(this.resolveZipPath(baseDir, rawHref));
-      const childOl = /<ol[^>]*>([\s\S]*?)<\/ol>/i.exec(liContent)?.[1];
+      const childOl = /<ol[^>]*>[\s\S]*?<\/ol>/i.exec(liContent)?.[0];
       items.push({
         href: resolvedHref,
         title,
@@ -248,7 +248,7 @@ export class EpubManifestService {
       const src = /<content[^>]+src="([^"]+)"/i.exec(block)?.[1];
       const title = /<text>([\s\S]*?)<\/text>/i.exec(block)?.[1]?.trim();
       if (!src || !title) continue;
-      const childItems = this.parseNavPoints(block, makeUrl, baseDir);
+      const childItems = this.parseNavPoints(this.extractInnerBlockContent(block, 'navPoint'), makeUrl, baseDir);
       items.push({
         href: makeUrl(this.resolveZipPath(baseDir, src)),
         title,
@@ -260,8 +260,8 @@ export class EpubManifestService {
 
   private extractTopLevelBlocks(xml: string, tagName: string): string[] {
     const results: string[] = [];
-    const openTag = new RegExp(`<${tagName}\\b`, 'i');
-    const closeTag = new RegExp(`</${tagName}>`, 'i');
+    const openTag = new RegExp(`^<${tagName}\\b`, 'i');
+    const closeTag = new RegExp(`^</${tagName}>`, 'i');
     let depth = 0;
     let start = -1;
     for (let i = 0; i < xml.length; i++) {
@@ -279,6 +279,15 @@ export class EpubManifestService {
       }
     }
     return results;
+  }
+
+  private extractInnerBlockContent(block: string, tagName: string): string {
+    const openTagEnd = block.indexOf('>');
+    const closeTagStart = block.lastIndexOf(`</${tagName}>`);
+    if (openTagEnd === -1 || closeTagStart === -1 || closeTagStart <= openTagEnd) {
+      return '';
+    }
+    return block.slice(openTagEnd + 1, closeTagStart);
   }
 
   private resolveZipPath(baseDir: string, relativePath: string): string {
