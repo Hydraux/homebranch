@@ -24,17 +24,23 @@ To set up a development environment, follow these steps:
     ```bash
     git checkout -b my-feature-branch dev
     ```
-4. Run the development server:
+4. install dependencies
+```bash
+    npm i
+```
+```
+```
+5. Run the development server:
     ```bash
-    npm run dev
+    npm run start:dev
     ```
-5. Make your changes and commit them with descriptive messages.
-6. Write tests for your changes if applicable, and ensure all tests pass before submitting your pull request.
-7. Push your changes to your fork:
+6. Make your changes and commit them with descriptive messages.
+7. Write tests for your changes if applicable, and ensure all tests pass before submitting your pull request.
+8. Push your changes to your fork:
     ```bash
     git push origin my-feature-branch
     ```
-8. Open a pull request against the `dev` branch of the original repository.
+9. Open a pull request against the `dev` branch of the original repository.
 
 ## Contributing Code of Conduct
 

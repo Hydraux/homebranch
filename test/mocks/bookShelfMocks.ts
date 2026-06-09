@@ -1,15 +1,21 @@
-import { AddBookToBookShelfRequest } from 'src/application/contracts/bookshelf/add-book-to-book-shelf-request';
-import { BookShelf } from 'src/domain/entities/bookshelf.entity';
-import { mockBook, mockBookFavorite } from './bookMocks';
+import { BookShelfEntity } from 'src/modules/book-shelf/book-shelf.entity';
+import { mockBookEntity } from './bookMocks';
 
-export const mockAddBookToBookShelfRequest: AddBookToBookShelfRequest = {
+export const mockAddBookToBookShelfRequest = {
   bookShelfId: 'bookshelf-123',
   bookId: 'book-456',
 };
 
-export const mockBookShelf: BookShelf = new BookShelf('bookshelf-123', 'Test Book Shelf', []);
+export const mockBookShelf: BookShelfEntity = {
+  id: 'bookshelf-123',
+  title: 'Test Book Shelf',
+  createdByUserId: undefined,
+  books: [],
+};
 
-export const mockBookShelfWithBooks: BookShelf = new BookShelf('bookshelf-with-books', 'My Favorites', [
-  mockBook,
-  mockBookFavorite,
-]);
+export const mockBookShelfWithBooks: BookShelfEntity = {
+  id: 'bookshelf-with-books',
+  title: 'My Favorites',
+  createdByUserId: undefined,
+  books: [mockBookEntity],
+};

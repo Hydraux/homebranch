@@ -1,6 +1,6 @@
-import { BookEntity } from 'src/infrastructure/database/book.entity';
-import { BookShelfEntity } from 'src/infrastructure/database/book-shelf.entity';
-import { SavedPositionEntity } from 'src/infrastructure/database/saved-position.entity';
+import { BookEntity } from 'src/modules/book/book.entity';
+import { BookShelfEntity } from 'src/modules/book-shelf/book-shelf.entity';
+import { SavedPositionEntity } from 'src/modules/saved-position/saved-position.entity';
 import { mockBook } from './bookMocks';
 import { mockBookShelf } from './bookShelfMocks';
 import { mockSavedPosition } from './savedPositionMocks';
@@ -36,8 +36,8 @@ export const mockBookEntity: BookEntity = {
 export const mockBookShelfEntity: BookShelfEntity = {
   id: mockBookShelf.id,
   title: mockBookShelf.title,
-  createdByUserId: undefined,
-  books: [],
+  createdByUserId: mockBookShelf.createdByUserId,
+  books: mockBookShelf.books,
 };
 
 export const mockSavedPositionEntity: SavedPositionEntity = {
