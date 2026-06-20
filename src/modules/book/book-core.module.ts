@@ -5,9 +5,10 @@ import { QueueModule } from 'src/modules/queue/queue.module';
 import { BookMetadataModule } from 'src/modules/book/metadata/book-metadata.module';
 import { BookFormatModule } from 'src/modules/book/format/book-format.module';
 import { BookPersistenceModule } from 'src/modules/book/persistence/book-persistence.module';
+import { StorageModule } from '../storage/storage.module';
 
 @Module({
-  imports: [BookPersistenceModule, BookMetadataModule, BookFormatModule, QueueModule],
+  imports: [BookPersistenceModule, BookMetadataModule, BookFormatModule, QueueModule, StorageModule],
   providers: [BookService, BookMutationService],
   exports: [BookPersistenceModule, BookService, BookMutationService, BookMetadataModule, BookFormatModule],
 })

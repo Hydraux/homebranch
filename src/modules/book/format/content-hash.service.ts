@@ -1,16 +1,24 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'crypto';
-import { createReadStream } from 'fs';
 import * as AdmZip from 'adm-zip';
+import { IStorageService, STORAGE_SERVICE_TOKEN } from '../../storage/storage.interface';
+import { createReadStream } from 'fs-extra';
 
 @Injectable()
 export class ContentHashService {
   private readonly logger = new Logger(ContentHashService.name);
 
-  async computeHash(filePath: string): Promise<string> {
+  constructor(@Inject(STORAGE_SERVICE_TOKEN) private readonly storage: IStorageService) {}
+
+  async computeHash(key: string): Promise<string> {
+    const { buffer } = await this.storage.getFileBuffer(key);
+    return this.computeHashFromBuffer(buffer, key);
+  }
+
+  async computeHashFromPath(filePath: string): Promise<string> {
     if (filePath.toLowerCase().endsWith('.epub')) {
       try {
-        return this.computeEpubContentHash(filePath);
+        return this.computeEpubContentHashFromPath(filePath);
       } catch (err) {
         this.logger.warn(`Failed to parse epub for content hash, falling back to file hash: ${err}`);
       }
@@ -18,13 +26,45 @@ export class ContentHashService {
     return this.computeFileHash(filePath);
   }
 
+  computeHashFromBuffer(buffer: Buffer, fileName: string): string {
+    if (fileName.toLowerCase().endsWith('.epub')) {
+      try {
+        return this.computeEpubContentHash(buffer);
+      } catch (err) {
+        this.logger.warn(`Failed to parse epub for content hash, falling back to file hash: ${err}`);
+      }
+    }
+    return this.computeBufferHash(buffer);
+  }
+
+  private computeBufferHash(buffer: Buffer): string {
+    const hash = createHash('sha256');
+    hash.update(buffer);
+    return hash.digest('hex');
+  }
+
+  private computeFileHash(filePath: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const hash = createHash('sha256');
+      const stream = createReadStream(filePath);
+      stream.on('data', (data) => hash.update(data));
+      stream.on('end', () => resolve(hash.digest('hex')));
+      stream.on('error', reject);
+    });
+  }
+
+  private computeEpubContentHashFromPath(filePath: string): string {
+    const zip = new AdmZip(filePath);
+    return this.computeEpubContentHash(zip);
+  }
+
   /**
    * Hashes only the chapter content files listed in the epub spine, in spine
    * order. This ensures two epubs of the same book with different embedded
    * metadata (title, summary, cover, etc.) produce the same hash.
    */
-  private computeEpubContentHash(filePath: string): string {
-    const zip = new AdmZip(filePath);
+  private computeEpubContentHash(buffer: Buffer | AdmZip): string {
+    const zip = buffer instanceof AdmZip ? buffer : new AdmZip(buffer);
 
     // 1. Locate the OPF file via META-INF/container.xml
     const containerEntry = zip.getEntry('META-INF/container.xml');
@@ -82,15 +122,5 @@ export class ContentHashService {
       hash.update(entry.getData());
     }
     return hash.digest('hex');
-  }
-
-  private computeFileHash(filePath: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const hash = createHash('sha256');
-      const stream = createReadStream(filePath);
-      stream.on('data', (data) => hash.update(data));
-      stream.on('end', () => resolve(hash.digest('hex')));
-      stream.on('error', reject);
-    });
   }
 }

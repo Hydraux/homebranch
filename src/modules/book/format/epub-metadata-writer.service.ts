@@ -1,22 +1,24 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import * as AdmZip from 'adm-zip';
 import { convert, create } from 'xmlbuilder2';
-import { renameSync, copyFileSync, unlinkSync } from 'fs';
-import { join, dirname } from 'path';
-import { randomUUID } from 'crypto';
 import { SyncableMetadata } from 'src/common/value-objects/syncable-metadata';
+import { IStorageService, STORAGE_SERVICE_TOKEN } from '../../storage/storage.interface';
+import { randomUUID } from 'crypto';
+import { dirname, join } from 'path';
+import { removeSync } from 'fs-extra';
+import { existsSync } from 'fs';
 
 @Injectable()
 export class EpubMetadataWriterService {
   private readonly logger = new Logger(EpubMetadataWriterService.name);
 
-  writeMetadata(epubPath: string, metadata: SyncableMetadata): Promise<void> {
+  constructor(@Inject(STORAGE_SERVICE_TOKEN) private readonly storage: IStorageService) {}
+
+  async writeMetadata(epubPath: string, metadata: SyncableMetadata): Promise<void> {
     const tempPath = join(dirname(epubPath), `.tmp-${randomUUID()}.epub`);
-
     try {
-      copyFileSync(epubPath, tempPath);
-
-      const zip = new AdmZip(tempPath);
+      const fileBufferResult = await this.storage.getFileBuffer(epubPath);
+      const zip = new AdmZip(fileBufferResult.buffer);
       const opfPath = this.findOpfPath(zip);
       if (!opfPath) {
         throw new Error('Could not locate OPF file in EPUB');
@@ -34,16 +36,20 @@ export class EpubMetadataWriterService {
         throw new Error('Validation failed: written EPUB has empty OPF');
       }
 
-      renameSync(tempPath, epubPath);
-    } catch (error) {
-      try {
-        unlinkSync(tempPath);
-      } catch {
-        // temp file may not exist
+      // Upload the modified file back to storage
+      const modifiedBuffer = validationZip.toBuffer();
+      await this.storage.uploadFile(modifiedBuffer, {
+        key: epubPath,
+        mimeType: 'application/epub+zip',
+      });
+    } catch (err) {
+      this.logger.error(`Failed to write metadata to EPUB: ${String(err)}`);
+      throw err; // Re-throw the error to be handled by the caller
+    } finally {
+      if (existsSync(tempPath)) {
+        removeSync(tempPath);
       }
-      throw error;
     }
-    return Promise.resolve();
   }
 
   private findOpfPath(zip: AdmZip): string | null {

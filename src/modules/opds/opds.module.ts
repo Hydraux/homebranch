@@ -7,9 +7,10 @@ import { OpdsV1Controller } from 'src/modules/opds/opds-v1.controller';
 import { OpdsV2Controller } from 'src/modules/opds/opds-v2.controller';
 import { OpdsBasicAuthGuard } from 'src/common/guards/opds-basic-auth.guard';
 import { BookShelvesModule } from 'src/modules/book-shelf/book-shelf.module';
+import { StorageModule } from '../storage/storage.module';
 
 @Module({
-  imports: [AuthModule, BookCoreModule, BookShelvesModule],
+  imports: [AuthModule, BookCoreModule, BookShelvesModule, StorageModule],
   providers: [
     // Guard (Basic Auth → Auth service → JWT verification)
     OpdsBasicAuthGuard,

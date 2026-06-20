@@ -9,7 +9,7 @@ describe('BookMutationService', () => {
   let service: BookMutationService;
   let bookPersistenceService: jest.Mocked<BookPersistenceService>;
   let fileProcessingQueue: { enqueueMetadataSync: jest.Mock };
-  let fileService: { writeFile: jest.Mock };
+  let storage: { uploadFile: jest.Mock };
   let bookFormatProcessingService: { parseMetadata: jest.Mock };
 
   beforeEach(() => {
@@ -21,14 +21,14 @@ describe('BookMutationService', () => {
       splitBookFormatRecord: jest.fn(),
     } as unknown as jest.Mocked<BookPersistenceService>;
     fileProcessingQueue = { enqueueMetadataSync: jest.fn() };
-    fileService = { writeFile: jest.fn() };
+    storage = { uploadFile: jest.fn() };
     bookFormatProcessingService = { parseMetadata: jest.fn() };
 
     service = new BookMutationService(
       bookPersistenceService,
       fileProcessingQueue as never,
-      fileService as never,
       bookFormatProcessingService as never,
+      storage as never,
     );
   });
 
@@ -46,7 +46,7 @@ describe('BookMutationService', () => {
     expect(fileProcessingQueue.enqueueMetadataSync).toHaveBeenCalledWith(
       mockBook.id,
       updatedBook.fileName,
-      expect.stringMatching(new RegExp(`books[\\\\/]${updatedBook.fileName.replace('.', '\\.')}$`)),
+      `books/${updatedBook.fileName}`,
       { jobId: `sync-${mockBook.id}` },
     );
   });
@@ -103,7 +103,7 @@ describe('BookMutationService', () => {
       author: 'Original Author',
       coverImageBuffer: Buffer.from('cover'),
     });
-    fileService.writeFile.mockResolvedValueOnce(undefined);
+    storage.uploadFile.mockResolvedValueOnce(undefined);
 
     await expect(
       service.unlinkBookFormat({
@@ -113,7 +113,11 @@ describe('BookMutationService', () => {
         requestingUserRole: 'USER',
       }),
     ).resolves.toEqual(expect.objectContaining({ fileName: 'Linked.epub' }));
-
     expect(bookPersistenceService.splitBookFormatRecord).toHaveBeenCalledTimes(1);
+    expect(bookFormatProcessingService.parseMetadata).toHaveBeenCalledWith('books/Original.pdf', BookFormatType.PDF);
+    expect(bookFormatProcessingService.parseMetadata).toHaveBeenCalledWith('books/Original.pdf', BookFormatType.PDF);
+    const [, uploadOptions] = storage.uploadFile.mock.calls[0] as [Buffer, { key: string; mimeType: string }];
+    expect(uploadOptions.key).toMatch(/^cover-images[\\/].+\.jpg$/);
+    expect(uploadOptions.mimeType).toBe('image/jpeg');
   });
 });

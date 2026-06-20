@@ -47,7 +47,7 @@ export class BookPublicationService {
       throw new BadRequestException(`Format "${selectedFormat.format}" does not support EPUB content access`);
     }
 
-    const entry = this.contentService.getContent({ ...book, fileName: selectedFormat.fileName }, entryPath);
+    const entry = await this.contentService.getContent({ ...book, fileName: selectedFormat.fileName }, entryPath);
     if (!entry) {
       throw new NotFoundException(`Content entry "${entryPath}" not found in publication`);
     }

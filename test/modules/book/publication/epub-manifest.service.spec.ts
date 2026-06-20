@@ -10,9 +10,11 @@ jest.mock('adm-zip', () => {
 
 describe('EpubManifestService', () => {
   let service: EpubManifestService;
+  let epubArchiveCache: { getArchive: jest.Mock };
 
   beforeEach(() => {
-    service = new EpubManifestService();
+    epubArchiveCache = { getArchive: jest.fn().mockResolvedValue({ readAsText }) };
+    service = new EpubManifestService(epubArchiveCache as never);
     readAsText.mockReset();
     process.env.UPLOADS_DIRECTORY = '/library';
   });
@@ -21,7 +23,7 @@ describe('EpubManifestService', () => {
     delete process.env.UPLOADS_DIRECTORY;
   });
 
-  test('normalizes relative TOC hrefs so they match reading order resources', () => {
+  test('normalizes relative TOC hrefs so they match reading order resources', async () => {
     readAsText.mockImplementation((path: string) => {
       if (path === 'META-INF/container.xml') {
         return `<?xml version="1.0"?>
@@ -64,10 +66,10 @@ describe('EpubManifestService', () => {
       throw new Error(`Unexpected path: ${path}`);
     });
 
-    const manifest = service.generateManifest(
+    const manifest = (await service.generateManifest(
       { id: 'book-1', title: 'Book', author: 'Author', fileName: 'book.epub' } as never,
       'https://reader.example.com/api',
-    ) as {
+    )) as {
       readingOrder: Array<{ href: string }>;
       toc: Array<{ href: string }>;
     };
@@ -80,7 +82,7 @@ describe('EpubManifestService', () => {
     );
   });
 
-  test('preserves nested EPUB3 TOC children', () => {
+  test('preserves nested EPUB3 TOC children', async () => {
     readAsText.mockImplementation((path: string) => {
       if (path === 'META-INF/container.xml') {
         return `<?xml version="1.0"?>
@@ -125,10 +127,10 @@ describe('EpubManifestService', () => {
       throw new Error(`Unexpected path: ${path}`);
     });
 
-    const manifest = service.generateManifest(
+    const manifest = (await service.generateManifest(
       { id: 'book-1', title: 'Book', author: 'Author', fileName: 'book.epub' } as never,
       'https://reader.example.com/api',
-    ) as {
+    )) as {
       toc: Array<{ href: string; children?: Array<{ href: string }> }>;
     };
 
@@ -146,7 +148,7 @@ describe('EpubManifestService', () => {
     ]);
   });
 
-  test('parses nested EPUB2 NCX TOC entries', () => {
+  test('parses nested EPUB2 NCX TOC entries', async () => {
     readAsText.mockImplementation((path: string) => {
       if (path === 'META-INF/container.xml') {
         return `<?xml version="1.0"?>
@@ -195,10 +197,10 @@ describe('EpubManifestService', () => {
       throw new Error(`Unexpected path: ${path}`);
     });
 
-    const manifest = service.generateManifest(
+    const manifest = (await service.generateManifest(
       { id: 'book-1', title: 'Book', author: 'Author', fileName: 'book.epub' } as never,
       'https://reader.example.com/api',
-    ) as {
+    )) as {
       toc: Array<{ href: string; children?: Array<{ href: string }> }>;
     };
 

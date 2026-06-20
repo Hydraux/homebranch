@@ -41,6 +41,7 @@ describe('BookShelfController (e2e)', () => {
       .overrideGuard(JwtAuthGuard)
       .useValue({
         canActivate: (context: ExecutionContext) => {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
           context.switchToHttp().getRequest().user = { id: 'user-1' };
           return true;
         },

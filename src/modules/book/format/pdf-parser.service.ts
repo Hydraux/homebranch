@@ -1,11 +1,13 @@
-import { Injectable } from '@nestjs/common';
-import { readFile } from 'fs/promises';
+import { Inject, Injectable } from '@nestjs/common';
 import { BookFileMetadata } from 'src/modules/book/format/book-file-metadata.interface';
+import { IStorageService, STORAGE_SERVICE_TOKEN } from 'src/modules/storage/storage.interface';
 
 @Injectable()
 export class PdfParserService {
-  async parse(filePath: string): Promise<BookFileMetadata> {
-    const buffer = await readFile(filePath);
+  constructor(@Inject(STORAGE_SERVICE_TOKEN) private readonly storage: IStorageService) {}
+
+  async parse(key: string): Promise<BookFileMetadata> {
+    const { buffer } = await this.storage.getFileBuffer(key);
     const content = buffer.toString('latin1');
     const metadata: BookFileMetadata = {};
 

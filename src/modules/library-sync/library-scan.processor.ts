@@ -1,8 +1,6 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
+import { Inject, Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
-import { readdirSync, statSync } from 'fs';
-import { join } from 'path';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { LibraryEventsService } from 'src/modules/library-sync/library-events.service';
@@ -13,6 +11,8 @@ import {
   getBookFormatByFileName,
   isSupportedBookFile,
 } from 'src/modules/book/format/book-format';
+import { IStorageService, STORAGE_SERVICE_TOKEN } from '../storage/storage.interface';
+import { StorageFileItem } from '../storage/storage.types';
 
 @Processor('library-scan')
 export class LibraryScanProcessor extends WorkerHost {
@@ -22,6 +22,7 @@ export class LibraryScanProcessor extends WorkerHost {
     private readonly bookPersistenceService: BookPersistenceService,
     @InjectQueue('file-processing') private readonly fileProcessingQueue: Queue,
     private readonly libraryEventsService: LibraryEventsService,
+    @Inject(STORAGE_SERVICE_TOKEN) private readonly storage: IStorageService,
   ) {
     super();
   }
@@ -46,9 +47,13 @@ export class LibraryScanProcessor extends WorkerHost {
     const { booksDirectory, trigger } = job.data;
     this.logger.log(`Scanning library (trigger: ${trigger}): ${booksDirectory}`);
 
-    let files: string[];
+    let files: StorageFileItem[];
     try {
-      files = readdirSync(booksDirectory).filter((f) => isSupportedBookFile(f) && !f.startsWith('.'));
+      files = await this.storage
+        .listFiles('books', true)
+        .then((storageFileItems) =>
+          storageFileItems.filter((f) => isSupportedBookFile(f.fileName) && !f.fileName.startsWith('.')),
+        );
     } catch (error) {
       this.logger.error(`Cannot read books directory: ${String(error)}`);
       return;
@@ -65,31 +70,30 @@ export class LibraryScanProcessor extends WorkerHost {
       getAvailableBookFormatsFromBook(book).map((format) => ({ book, format })),
     );
     const dbFileNames = new Set(trackedFiles.map(({ format }) => format.fileName));
-    const diskFileNames = new Set(files);
+    const diskFileNames = new Set(files.map((file) => file.fileName));
 
     let processed = 0;
     const total = files.length + trackedFiles.length;
 
     // Detect new or changed files
-    for (const fileName of files) {
-      if (!dbFileNames.has(fileName)) {
-        const filePath = join(booksDirectory, fileName);
+    for (const file of files) {
+      if (!dbFileNames.has(file.fileName)) {
+        const filePath = file.key;
         await this.fileProcessingQueue.add(
           'process-new-file',
-          { fileName, filePath },
-          { jobId: `new-${fileName}-${Date.now()}`, removeOnComplete: 100, removeOnFail: 50 },
+          { fileName: file.fileName, filePath },
+          { jobId: `new-${file.fileName}-${Date.now()}`, removeOnComplete: 100, removeOnFail: 50 },
         );
       } else {
         // Check for metadata changes via mtime
-        const filePath = join(booksDirectory, fileName);
+        const filePath = file.key;
         try {
-          const stat = statSync(filePath);
-          const mtime = stat.mtimeMs;
-          const trackedFile = trackedFiles.find(({ format }) => format.fileName === fileName);
+          const mtime: number = file.updatedAt.getTime();
+          const trackedFile = trackedFiles.find(({ format }) => format.fileName === file.fileName);
           if (trackedFile?.format.fileMtime && Math.abs(mtime - trackedFile.format.fileMtime) > 1000) {
             await this.fileProcessingQueue.add(
               'sync-metadata',
-              { bookId: trackedFile.book.id, fileName, filePath },
+              { bookId: trackedFile.book.id, fileName: file.fileName, filePath },
               { jobId: `sync-${trackedFile.book.id}-${Date.now()}`, removeOnComplete: 100, removeOnFail: 50 },
             );
           }

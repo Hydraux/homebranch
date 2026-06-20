@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmConfigModule } from 'src/modules/typeorm/typeorm.module';
 import { BooksModule } from 'src/modules/book/book.module';
@@ -12,6 +12,12 @@ import { OpdsModule } from 'src/modules/opds/opds.module';
 import { QueueModule } from 'src/modules/queue/queue.module';
 import { LibrarySyncModule } from 'src/modules/library-sync/library-sync.module';
 import { JobsModule } from 'src/modules/jobs/jobs.module';
+import { StorageModule } from './modules/storage/storage.module';
+import LocalStorage from './modules/storage/local-storage';
+import { R2Storage } from './modules/storage/r2-storage';
+import { EnvironmentVariables } from './common/types/env.interface';
+import { IStorageService, STORAGE_SERVICE_TOKEN } from './modules/storage/storage.interface';
+import { UploadsModule } from './modules/uploads/uploads.module';
 
 @Module({
   imports: [
@@ -40,8 +46,23 @@ import { JobsModule } from 'src/modules/jobs/jobs.module';
     OpdsModule,
     LibrarySyncModule,
     JobsModule,
+    StorageModule,
+    UploadsModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [
+    {
+      provide: STORAGE_SERVICE_TOKEN,
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService<EnvironmentVariables>): IStorageService => {
+        const useLocalStorage = configService.get<'local' | 'r2'>('STORAGE_LOCATION', 'local') === 'local';
+        if (useLocalStorage) {
+          return new LocalStorage(configService);
+        } else {
+          return new R2Storage(configService);
+        }
+      },
+    },
+  ],
 })
 export class AppModule {}

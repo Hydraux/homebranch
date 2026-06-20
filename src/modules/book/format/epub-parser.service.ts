@@ -1,6 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import EPub from 'epub2';
 import { BookFileMetadata } from 'src/modules/book/format/book-file-metadata.interface';
+import { IStorageService, STORAGE_SERVICE_TOKEN } from 'src/modules/storage/storage.interface';
+import { writeFile, unlink } from 'fs-extra';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { randomUUID } from 'crypto';
 
 interface EpubMetadata {
   title?: string;
@@ -23,49 +28,61 @@ interface EpubMetadata {
 export class EpubParserService {
   private readonly logger = new Logger(EpubParserService.name);
 
-  async parse(filePath: string): Promise<BookFileMetadata> {
-    const epub = (await EPub.createAsync(filePath)) as EPub;
-    const meta = epub.metadata as unknown as EpubMetadata;
-    const result: BookFileMetadata = {};
+  constructor(@Inject(STORAGE_SERVICE_TOKEN) private readonly storage: IStorageService) {}
 
-    if (meta.title) result.title = meta.title.trim();
-    if (meta.creator) result.author = meta.creator.trim();
-    if (meta.language) result.language = meta.language.trim();
-    if (meta.publisher) result.publisher = meta.publisher.trim();
+  async parse(key: string): Promise<BookFileMetadata> {
+    const { buffer } = await this.storage.getFileBuffer(key);
+    const tempFilePath = join(tmpdir(), `${randomUUID()}.epub`);
+    await writeFile(tempFilePath, buffer);
 
-    if (meta.date) {
-      const year = parseInt(meta.date.substring(0, 4), 10);
-      if (!isNaN(year) && year > 0) result.publishedYear = year;
+    try {
+      const epub = (await EPub.createAsync(tempFilePath)) as EPub;
+      const meta = epub.metadata as unknown as EpubMetadata;
+      const result: BookFileMetadata = {};
+
+      if (meta.title) result.title = meta.title.trim();
+      if (meta.creator) result.author = meta.creator.trim();
+      if (meta.language) result.language = meta.language.trim();
+      if (meta.publisher) result.publisher = meta.publisher.trim();
+
+      if (meta.date) {
+        const year = parseInt(meta.date.substring(0, 4), 10);
+        if (!isNaN(year) && year > 0) result.publishedYear = year;
+      }
+
+      if (meta.ISBN) result.isbn = meta.ISBN.trim();
+
+      if (meta.description) {
+        result.summary = meta.description.replace(/<[^>]+>/g, '').trim();
+      }
+
+      if (meta.subject?.length) {
+        result.genres = meta.subject.filter(Boolean).slice(0, 5);
+      }
+
+      // EPUB3: belongs-to-collection; fallback to Calibre-style metadata
+      const series = meta['belongs-to-collection'] ?? meta['calibre:series'];
+      if (series) result.series = String(series).trim();
+
+      // Series position: EPUB3 group-position or Calibre-style index
+      const positionRaw = meta['group-position'] ?? meta['calibre:series_index'];
+      if (positionRaw != null) {
+        const pos = parseFloat(String(positionRaw));
+        if (!isNaN(pos)) result.seriesPosition = pos;
+      }
+
+      const cover = await this.extractCover(epub);
+      if (cover) {
+        result.coverImageBuffer = cover.data;
+        result.coverImageMimeType = cover.mimeType;
+      }
+
+      return result;
+    } finally {
+      await unlink(tempFilePath).catch((e) => {
+        this.logger.warn(`Could not delete temporary epub file: ${tempFilePath}`, e);
+      });
     }
-
-    if (meta.ISBN) result.isbn = meta.ISBN.trim();
-
-    if (meta.description) {
-      result.summary = meta.description.replace(/<[^>]+>/g, '').trim();
-    }
-
-    if (meta.subject?.length) {
-      result.genres = meta.subject.filter(Boolean).slice(0, 5);
-    }
-
-    // EPUB3: belongs-to-collection; fallback to Calibre-style metadata
-    const series = meta['belongs-to-collection'] ?? meta['calibre:series'];
-    if (series) result.series = String(series).trim();
-
-    // Series position: EPUB3 group-position or Calibre-style index
-    const positionRaw = meta['group-position'] ?? meta['calibre:series_index'];
-    if (positionRaw != null) {
-      const pos = parseFloat(String(positionRaw));
-      if (!isNaN(pos)) result.seriesPosition = pos;
-    }
-
-    const cover = await this.extractCover(epub);
-    if (cover) {
-      result.coverImageBuffer = cover.data;
-      result.coverImageMimeType = cover.mimeType;
-    }
-
-    return result;
   }
 
   private async extractCover(epub: EPub): Promise<{ data: Buffer; mimeType: string } | null> {

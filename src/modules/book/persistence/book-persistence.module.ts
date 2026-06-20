@@ -5,9 +5,14 @@ import { UserBookFavoriteEntity } from 'src/modules/book/user-book-favorite.enti
 import { BookFormatEntity } from 'src/modules/book/format/book-format.entity';
 import { BookFormatModule } from 'src/modules/book/format/book-format.module';
 import { BookPersistenceService } from 'src/modules/book/persistence/book.persistence';
+import { StorageModule } from '../../storage/storage.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([BookEntity, BookFormatEntity, UserBookFavoriteEntity]), BookFormatModule],
+  imports: [
+    TypeOrmModule.forFeature([BookEntity, BookFormatEntity, UserBookFavoriteEntity]),
+    BookFormatModule,
+    StorageModule,
+  ],
   providers: [BookPersistenceService],
   exports: [BookPersistenceService, TypeOrmModule],
 })

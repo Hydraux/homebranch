@@ -1,10 +1,8 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
+import { Inject, Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
-import { statSync, existsSync, renameSync } from 'fs';
 import { join, basename, extname } from 'path';
 import { randomUUID } from 'crypto';
-import { writeFile } from 'fs/promises';
 import { BookFileMetadata } from 'src/modules/book/format/book-file-metadata.interface';
 import { Book, copyBook } from 'src/modules/book/book.model';
 import { ContentHashService } from 'src/modules/book/format/content-hash.service';
@@ -29,6 +27,7 @@ import { BookFormatProcessingService } from 'src/modules/book/format/book-format
 import { CompositeMetadataGateway } from 'src/modules/book/metadata/gateways/composite-metadata.gateway';
 import { SettingsService } from 'src/modules/settings/settings.service';
 import { BookPersistenceService } from 'src/modules/book/persistence/book.persistence';
+import { IStorageService, STORAGE_SERVICE_TOKEN } from '../storage/storage.interface';
 
 @Processor('file-processing')
 export class FileProcessingProcessor extends WorkerHost {
@@ -41,6 +40,7 @@ export class FileProcessingProcessor extends WorkerHost {
     private readonly settingsService: SettingsService,
     private readonly libraryEventsService: LibraryEventsService,
     private readonly bookFormatProcessingService: BookFormatProcessingService,
+    @Inject(STORAGE_SERVICE_TOKEN) private readonly storage: IStorageService,
   ) {
     super();
   }
@@ -94,7 +94,7 @@ export class FileProcessingProcessor extends WorkerHost {
     const byHash = await this.bookPersistenceService.findBookByContentHash(contentHash, true);
     if (byHash?.deletedAt) {
       this.logger.log(`Restoring soft-deleted book by content hash: "${byHash.title}" (was "${byHash.fileName}")`);
-      const stat = statSync(filePath);
+      const stat = await this.storage.getFileStats(filePath);
       const restoredFormat = withBookMetadataFallback(
         Object.assign(new BookFormatEntity(), {
           id: randomUUID(),
@@ -130,7 +130,6 @@ export class FileProcessingProcessor extends WorkerHost {
 
     // New book or new format — parse file metadata
     await job.updateProgress(40);
-    const uploadsDirectory = process.env.UPLOADS_DIRECTORY || './uploads';
 
     const fileMetadata = await this.parseBookFileMetadata(filePath, fileName);
     const seededFileMetadata = fillBookMetadataFromFileName({ ...fileMetadata }, fileName);
@@ -143,11 +142,13 @@ export class FileProcessingProcessor extends WorkerHost {
     let coverImageFileName: string | undefined;
     if (fileMetadata.coverImageBuffer) {
       coverImageFileName = `${randomUUID()}.jpg`;
-      const coverPath = join(uploadsDirectory, 'cover-images', coverImageFileName);
-      await writeFile(coverPath, fileMetadata.coverImageBuffer);
+      await this.storage.uploadFile(fileMetadata.coverImageBuffer, {
+        key: `cover-images/${coverImageFileName}`,
+        mimeType: 'image/jpeg',
+      });
     }
 
-    const stat = statSync(filePath);
+    const stat = await this.storage.getFileStats(filePath);
     const formatMetadata = {
       ...buildBookFormatMetadata(fileMetadata, fileName, coverImageFileName),
       title,
@@ -257,7 +258,7 @@ export class FileProcessingProcessor extends WorkerHost {
   }
 
   private async updateBookFileMetadata(bookId: string, fileName: string, filePath: string, contentHash: string) {
-    const stat = statSync(filePath);
+    const stat = await this.storage.getFileStats(filePath);
     try {
       const book = await this.bookPersistenceService.findBookById(bookId);
       const updatedBook = this.withUpdatedFormatState(book, fileName, {
@@ -317,7 +318,7 @@ export class FileProcessingProcessor extends WorkerHost {
     const lastSynced = (book.syncedMetadata as unknown as SyncableMetadata) || null;
     const mergeResult = MetadataMerger.merge(fileMetadata, dbMetadata, lastSynced, this.logger);
 
-    const stat = statSync(filePath);
+    const stat = await this.storage.getFileStats(filePath);
     let finalMtime = stat.mtimeMs;
     let finalHash = await this.contentHashService.computeHash(filePath);
 
@@ -326,7 +327,7 @@ export class FileProcessingProcessor extends WorkerHost {
         await this.bookFormatProcessingService.writeMetadata(filePath, detectedFormat, mergeResult.merged);
 
         // Recompute hash and stat after writing since the file changed
-        const postWriteStat = statSync(filePath);
+        const postWriteStat = await this.storage.getFileStats(filePath);
         finalMtime = postWriteStat.mtimeMs;
         finalHash = await this.contentHashService.computeHash(filePath);
         this.logger.log(`Updated file metadata for "${book.title}"`);
@@ -400,22 +401,23 @@ export class FileProcessingProcessor extends WorkerHost {
     const { bookId, currentFileName, newFileName } = job.data;
     this.logger.log(`Renaming legacy file: ${currentFileName} → ${newFileName}`);
 
-    const uploadsDir = process.env.UPLOADS_DIRECTORY || './uploads';
-    const currentPath = join(uploadsDir, 'books', basename(currentFileName));
-    const newPath = join(uploadsDir, 'books', basename(newFileName));
+    const currentPath = join('books', basename(currentFileName));
+    const newPath = join('books', basename(newFileName));
 
-    if (!existsSync(currentPath)) {
+    const currentExists = await this.storage.exists(currentPath);
+    if (!currentExists) {
       this.logger.warn(`Source file not found: ${currentPath}`);
       return;
     }
 
-    if (existsSync(newPath)) {
+    const newExists = await this.storage.exists(newPath);
+    if (newExists) {
       this.logger.warn(`Target file already exists: ${newPath}`);
       return;
     }
 
     try {
-      renameSync(currentPath, newPath);
+      await this.storage.moveFile(currentPath, newPath);
 
       try {
         const book = await this.bookPersistenceService.findBookById(bookId);
@@ -431,7 +433,7 @@ export class FileProcessingProcessor extends WorkerHost {
         await this.bookPersistenceService.updateBookRecord(bookId, updatedBook);
         this.logger.log(`Renamed: ${currentFileName} → ${newFileName}`);
       } catch {
-        renameSync(newPath, currentPath);
+        await this.storage.moveFile(newPath, currentPath);
         this.logger.error(`DB update failed, rolled back rename for ${currentFileName}`);
       }
     } catch (error) {

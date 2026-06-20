@@ -3,8 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from 'src/app.module';
 import { DomainExceptionFilter } from 'src/common/filters/domain-exception.filter';
 import { existsSync, mkdirSync } from 'fs';
-import { join, resolve } from 'path';
-import * as express from 'express';
+import { join } from 'path';
 import * as cookieParser from 'cookie-parser';
 
 async function bootstrap() {
@@ -46,8 +45,6 @@ async function bootstrap() {
     logger.warn(`Incoming directory "${incomingDirectory}" does not exist. Creating it...`);
     mkdirSync(incomingDirectory, { recursive: true });
   }
-  app.use('/uploads/cover-images', express.static(resolve(coverImagesDirectory)));
-  app.use('/uploads/author-images', express.static(resolve(authorImagesDirectory)));
   await app.listen(port);
   logger.log(`Application is running on: http://localhost:${port}`);
   logger.log(`Environment: ${process.env.NODE_ENV || 'development'}`);

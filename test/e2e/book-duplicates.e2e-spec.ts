@@ -54,6 +54,7 @@ describe('BookDuplicateController (e2e)', () => {
 
     const response = await request(app.getHttpServer()).get('/books/duplicates?limit=10').expect(200);
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(response.body.total).toBe(0);
     expect(mockBookDuplicateService.listDuplicates).toHaveBeenCalledWith(10, undefined);
   });
@@ -63,6 +64,7 @@ describe('BookDuplicateController (e2e)', () => {
 
     const response = await request(app.getHttpServer()).post('/books/duplicates/scan').expect(202);
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(response.body.message).toBe('Duplicate scan job enqueued');
   });
 
@@ -74,6 +76,7 @@ describe('BookDuplicateController (e2e)', () => {
       .send({ action: 'keep_both' })
       .expect(201);
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(response.body.id).toBe('dup-1');
     expect(mockBookDuplicateService.resolveDuplicate).toHaveBeenCalledWith('dup-1', 'keep_both', 'admin-1');
   });

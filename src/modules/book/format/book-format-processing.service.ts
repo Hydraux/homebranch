@@ -1,4 +1,4 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'crypto';
 import { join } from 'path';
@@ -10,17 +10,17 @@ import { BookFormatType } from 'src/modules/book/format/book-format-type.enum';
 import { supportsBookFormatMetadataWrite } from 'src/modules/book/format/book-format';
 import { SyncableMetadata } from 'src/common/value-objects/syncable-metadata';
 import { EpubMetadataWriterService } from 'src/modules/book/format/epub-metadata-writer.service';
-import { FileService } from 'src/modules/book/format/file.service';
 import { BookEntity } from 'src/modules/book/book.entity';
 import { BookFormatEntity } from 'src/modules/book/format/book-format.entity';
 import { buildBookFormatMetadata, hasStoredFormatMetadata } from 'src/modules/book/format/book-format-metadata';
+import { IStorageService, STORAGE_SERVICE_TOKEN } from '../../storage/storage.interface';
 
 type MetadataParser = {
-  parse(filePath: string): Promise<BookFileMetadata>;
+  parse(key: string): Promise<BookFileMetadata>;
 };
 
 type MetadataWriter = {
-  writeMetadata(filePath: string, metadata: SyncableMetadata): Promise<void>;
+  writeMetadata(key: string, metadata: SyncableMetadata): Promise<void>;
 };
 
 @Injectable()
@@ -34,7 +34,7 @@ export class BookFormatProcessingService {
     @InjectRepository(BookFormatEntity) private readonly formatRepository: Repository<BookFormatEntity>,
     private readonly epubParser: EpubParserService,
     private readonly pdfParser: PdfParserService,
-    private readonly fileService: FileService,
+    @Inject(STORAGE_SERVICE_TOKEN) private readonly storage: IStorageService,
     @Optional() private readonly epubMetadataWriter?: EpubMetadataWriterService,
   ) {
     this.parsers = {
@@ -46,21 +46,21 @@ export class BookFormatProcessingService {
     };
   }
 
-  async parseMetadata(filePath: string, format: BookFormatType): Promise<BookFileMetadata> {
+  async parseMetadata(key: string, format: BookFormatType): Promise<BookFileMetadata> {
     const parser = this.parsers[format];
-    return parser ? parser.parse(filePath) : {};
+    return parser ? parser.parse(key) : {};
   }
 
   canWriteMetadata(format: BookFormatType): boolean {
     return supportsBookFormatMetadataWrite(format) && Boolean(this.metadataWriters[format]);
   }
 
-  async writeMetadata(filePath: string, format: BookFormatType, metadata: SyncableMetadata): Promise<boolean> {
+  async writeMetadata(key: string, format: BookFormatType, metadata: SyncableMetadata): Promise<boolean> {
     const writer = this.metadataWriters[format];
     if (!writer) {
       return false;
     }
-    await writer.writeMetadata(filePath, metadata);
+    await writer.writeMetadata(key, metadata);
     return true;
   }
 
@@ -107,11 +107,10 @@ export class BookFormatProcessingService {
   }
 
   private async parseStoredFormatMetadata(format: BookFormatEntity): Promise<BookFileMetadata> {
-    const uploadsDirectory = process.env.UPLOADS_DIRECTORY || './uploads';
-    const filePath = join(uploadsDirectory, 'books', format.fileName);
+    const key = join('books', format.fileName);
 
     try {
-      return await this.parseMetadata(filePath, format.format);
+      return await this.parseMetadata(key, format.format);
     } catch (error) {
       this.logger.warn(`Could not parse metadata for format "${format.fileName}": ${String(error)}`);
       return {};
@@ -123,12 +122,11 @@ export class BookFormatProcessingService {
       return undefined;
     }
 
-    const uploadsDirectory = process.env.UPLOADS_DIRECTORY || './uploads';
     const coverImageFileName = `${randomUUID()}.jpg`;
-    await this.fileService.writeFile(
-      join(uploadsDirectory, 'cover-images', coverImageFileName),
-      fileMetadata.coverImageBuffer,
-    );
+    await this.storage.uploadFile(fileMetadata.coverImageBuffer, {
+      key: join('cover-images', coverImageFileName),
+      mimeType: 'image/jpeg',
+    });
     return coverImageFileName;
   }
 }

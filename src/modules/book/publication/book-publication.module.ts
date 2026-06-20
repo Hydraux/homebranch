@@ -5,10 +5,12 @@ import { BookPublicationService } from 'src/modules/book/publication/book-public
 import { EpubManifestService } from 'src/modules/book/publication/epub-manifest.service';
 import { EpubContentService } from 'src/modules/book/publication/epub-content.service';
 import { BookPublicationController } from 'src/modules/book/publication/book-publication.controller';
+import { StorageModule } from '../../storage/storage.module';
+import { EpubArchiveCacheService } from 'src/modules/book/publication/epub-archive-cache.service';
 
 @Module({
-  imports: [AuthModule, BookCoreModule],
-  providers: [BookPublicationService, EpubManifestService, EpubContentService],
+  imports: [AuthModule, BookCoreModule, StorageModule],
+  providers: [BookPublicationService, EpubManifestService, EpubContentService, EpubArchiveCacheService],
   controllers: [BookPublicationController],
 })
 export class BookPublicationModule {}

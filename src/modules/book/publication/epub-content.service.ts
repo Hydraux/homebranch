@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import * as AdmZip from 'adm-zip';
 import { basename, join } from 'path';
 import { Book } from 'src/modules/book/book.model';
+import { EpubArchiveCacheService } from 'src/modules/book/publication/epub-archive-cache.service';
 
 export interface PublicationContentEntry {
   data: Buffer;
@@ -37,12 +37,13 @@ const MEDIA_TYPE_MAP: Record<string, string> = {
 export class EpubContentService {
   private readonly logger = new Logger(EpubContentService.name);
 
-  getContent(book: Book, entryPath: string): PublicationContentEntry | null {
-    const uploadsDirectory = process.env.UPLOADS_DIRECTORY || './uploads';
-    const epubPath = join(uploadsDirectory, 'books', basename(book.fileName));
+  constructor(private readonly epubArchiveCache: EpubArchiveCacheService) {}
+
+  async getContent(book: Book, entryPath: string): Promise<PublicationContentEntry | null> {
+    const epubPath = join('books', basename(book.fileName));
 
     try {
-      const zip = new AdmZip(epubPath);
+      const zip = await this.epubArchiveCache.getArchive(epubPath);
       const entry = zip.getEntry(entryPath) ?? zip.getEntry(decodeURIComponent(entryPath));
       if (!entry) return null;
 

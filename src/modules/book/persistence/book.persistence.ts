@@ -1,7 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { existsSync, unlinkSync } from 'fs';
-import { join } from 'path';
 import { In, IsNull, Repository, SelectQueryBuilder } from 'typeorm';
 import { PaginationResult } from 'src/common/core/pagination_result';
 import { Book } from 'src/modules/book/book.model';
@@ -9,6 +7,7 @@ import { BookEntity } from 'src/modules/book/book.entity';
 import { BookFormatEntity } from 'src/modules/book/format/book-format.entity';
 import { UserBookFavoriteEntity } from 'src/modules/book/user-book-favorite.entity';
 import { BookFormatProcessingService } from 'src/modules/book/format/book-format-processing.service';
+import { IStorageService, STORAGE_SERVICE_TOKEN } from '../../storage/storage.interface';
 
 export interface BookSearchFilters {
   query?: string;
@@ -26,6 +25,7 @@ export class BookPersistenceService {
     @InjectRepository(UserBookFavoriteEntity)
     private readonly favoriteRepository: Repository<UserBookFavoriteEntity>,
     private readonly bookFormatProcessingService: BookFormatProcessingService,
+    @Inject(STORAGE_SERVICE_TOKEN) private readonly storage: IStorageService,
   ) {}
 
   normalizeBookEntity(bookEntity: BookEntity): Book {
@@ -161,7 +161,7 @@ export class BookPersistenceService {
   }
 
   permanentDeleteBook(id: string): Promise<Book> {
-    return permanentDeleteBook(this.bookRepository, id);
+    return permanentDeleteBook(this.bookRepository, id, this.storage);
   }
 
   softDeleteBookRecord(id: string): Promise<Book> {
@@ -577,23 +577,23 @@ export async function splitBookFormatRecord(
   return findPersistedBook(repository, bookFormatProcessingService, bookId);
 }
 
-export async function permanentDeleteBook(repository: Repository<BookEntity>, id: string): Promise<Book> {
+export async function permanentDeleteBook(
+  repository: Repository<BookEntity>,
+  id: string,
+  storage: IStorageService,
+): Promise<Book> {
   const bookEntity = await repository.findOne({ where: { id }, relations: { formats: true } });
   if (!bookEntity) {
     throw new NotFoundException('Book not found');
   }
 
   const book = normalizeBookEntity(bookEntity);
-  const uploadsDir = process.env.UPLOADS_DIRECTORY || join(process.cwd(), 'uploads');
   const fileNames = new Set(book.formats?.map((format) => format.fileName) ?? [book.fileName]);
   for (const fileName of fileNames) {
-    if (existsSync(join(uploadsDir, 'books', fileName))) {
-      unlinkSync(join(uploadsDir, 'books', fileName));
-    }
+    const key = `books/${fileName}`;
+    await storage.deleteFile(key);
   }
-  if (book.coverImageFileName && existsSync(join(uploadsDir, 'cover-images', book.coverImageFileName))) {
-    unlinkSync(join(uploadsDir, 'cover-images', book.coverImageFileName));
-  }
+  await storage.deleteFile(`cover-images/${book.coverImageFileName}`);
   await repository.delete(id);
   return book;
 }

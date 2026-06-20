@@ -36,7 +36,6 @@ import { BackfillLegacyBookFormats1777228301570 } from 'src/migrations/177722830
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
         const logger = new Logger('TypeOrmModule');
-        const isProduction = configService.get<string>('NODE_ENV') === 'production';
 
         // Validate required environment variables
         const username = configService.get<string>('DATABASE_USERNAME');
@@ -92,7 +91,7 @@ import { BackfillLegacyBookFormats1777228301570 } from 'src/migrations/177722830
           migrationsRun: true,
           migrationsTableName: 'migration_table',
           synchronize: false,
-          logging: !isProduction,
+          logging: false,
           namingStrategy: new SnakeNamingStrategy(),
         };
       },

@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Header,
+  Inject,
   Logger,
   Param,
   Query,
@@ -18,10 +19,10 @@ import { BookService } from 'src/modules/book/catalog/book.service';
 import { OpdsV1Builder } from 'src/modules/opds/opds-v1.builder';
 import { OPDS_MEDIA_TYPE } from 'src/modules/opds/opds-link.helper';
 import { Request, Response } from 'express';
-import { createReadStream, existsSync } from 'fs';
-import { basename, join } from 'path';
 import { buildExternalBaseUrl } from 'src/common/utils/external-url';
 import { BookShelfService } from 'src/modules/book-shelf/book-shelf.service';
+import { IStorageService, STORAGE_SERVICE_TOKEN } from '../storage/storage.interface';
+import { Readable } from 'node:stream';
 
 const DEFAULT_LIMIT = 20;
 
@@ -34,6 +35,7 @@ export class OpdsV1Controller {
     private readonly bookService: BookService,
     private readonly bookShelfService: BookShelfService,
     private readonly opdsV1Builder: OpdsV1Builder,
+    @Inject(STORAGE_SERVICE_TOKEN) private readonly storage: IStorageService,
   ) {}
 
   @Get('catalog')
@@ -110,27 +112,16 @@ export class OpdsV1Controller {
 
   @Get('download/:id')
   @UseGuards(OpdsBasicAuthGuard)
-  async downloadBook(
-    @Param('id') id: string,
-    @Res({ passthrough: true }) response: Response,
-  ): Promise<StreamableFile | void> {
+  async downloadBook(@Param('id') id: string): Promise<StreamableFile | void> {
     const { book, format, fileName } = await this.bookService.getDownload(id);
     const sanitizedTitle = book.title.replace(/[^\w\s-]/g, '').trim() || 'book';
-    const uploadsDirectory = process.env.UPLOADS_DIRECTORY || './uploads';
-    const safeFileName = basename(fileName);
-    const filePath = join(uploadsDirectory, 'books', safeFileName);
 
-    if (!existsSync(filePath)) {
-      response
-        .status(404)
-        .json({ success: false, error: 'BOOK_FILE_NOT_FOUND', message: 'Book file not found on server' });
-      return;
-    }
+    const storageStreamResult = await this.storage.getFileStream(`books/${fileName}`);
+    const stream = storageStreamResult.stream;
 
-    const fileStream = createReadStream(filePath);
+    const fileStream = Readable.from(stream);
     fileStream.on('error', (err) => {
       this.logger.error(`Error streaming book file: ${err.message}`);
-      fileStream.destroy();
     });
 
     return new StreamableFile(fileStream, {

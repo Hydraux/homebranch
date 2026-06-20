@@ -1,4 +1,6 @@
 import { EpubParserService } from 'src/modules/book/format/epub-parser.service';
+import { IStorageService } from 'src/modules/storage/storage.interface';
+import { mock } from 'jest-mock-extended';
 
 jest.mock('epub2', () => {
   const mockEpub = {
@@ -26,16 +28,23 @@ const mockEpub = epub2.__mockEpub;
 
 describe('EpubParserService', () => {
   let service: EpubParserService;
+  let storageService: ReturnType<typeof mock<IStorageService>>;
 
   beforeEach(() => {
-    service = new EpubParserService();
+    storageService = mock<IStorageService>();
+    storageService.getFileBuffer.mockResolvedValue({
+      key: 'test-key',
+      buffer: Buffer.from('fake-epub-content'),
+    });
+
+    service = new EpubParserService(storageService);
     mockEpub.metadata = {};
     mockEpub.manifest = {};
     mockEpub.getImageAsync = jest.fn();
   });
 
   test('Returns empty object when epub has no metadata', async () => {
-    const result = await service.parse('/fake/path/book.epub');
+    const result = await service.parse('test-key');
     expect(result).toEqual({});
   });
 
@@ -51,7 +60,7 @@ describe('EpubParserService', () => {
       subject: ['Fiction', 'Adventure'],
     };
 
-    const result = await service.parse('/fake/path/book.epub');
+    const result = await service.parse('test-key');
 
     expect(result.title).toBe('My Book');
     expect(result.author).toBe('Jane Doe');
@@ -65,7 +74,7 @@ describe('EpubParserService', () => {
 
   test('Strips HTML tags from description', async () => {
     mockEpub.metadata = { description: '<p>A <strong>great</strong> book.</p>' };
-    const result = await service.parse('/fake/path/book.epub');
+    const result = await service.parse('test-key');
     expect(result.summary).toBe('A great book.');
   });
 
@@ -73,7 +82,7 @@ describe('EpubParserService', () => {
     mockEpub.metadata = {
       subject: ['A', 'B', 'C', 'D', 'E', 'F', 'G'],
     };
-    const result = await service.parse('/fake/path/book.epub');
+    const result = await service.parse('test-key');
     expect(result.genres).toHaveLength(5);
   });
 
@@ -82,7 +91,7 @@ describe('EpubParserService', () => {
       'belongs-to-collection': 'The Great Series',
       'group-position': '3',
     };
-    const result = await service.parse('/fake/path/book.epub');
+    const result = await service.parse('test-key');
     expect(result.series).toBe('The Great Series');
     expect(result.seriesPosition).toBe(3);
   });
@@ -92,7 +101,7 @@ describe('EpubParserService', () => {
       'calibre:series': 'Calibre Series',
       'calibre:series_index': '1.5',
     };
-    const result = await service.parse('/fake/path/book.epub');
+    const result = await service.parse('test-key');
     expect(result.series).toBe('Calibre Series');
     expect(result.seriesPosition).toBe(1.5);
   });
@@ -102,7 +111,7 @@ describe('EpubParserService', () => {
     mockEpub.metadata = { cover: 'cover-img-id' };
     mockEpub.getImageAsync = jest.fn().mockResolvedValue([fakeBuffer, 'image/jpeg']);
 
-    const result = await service.parse('/fake/path/book.epub');
+    const result = await service.parse('test-key');
 
     expect(mockEpub.getImageAsync).toHaveBeenCalledWith('cover-img-id');
     expect(result.coverImageBuffer).toEqual(fakeBuffer);
@@ -117,7 +126,7 @@ describe('EpubParserService', () => {
     };
     mockEpub.getImageAsync = jest.fn().mockResolvedValue([fakeBuffer, 'image/jpeg']);
 
-    const result = await service.parse('/fake/path/book.epub');
+    const result = await service.parse('test-key');
 
     expect(mockEpub.getImageAsync).toHaveBeenCalledWith('cover-image');
     expect(result.coverImageBuffer).toEqual(fakeBuffer);
@@ -127,13 +136,13 @@ describe('EpubParserService', () => {
     mockEpub.metadata = { cover: 'cover-id' };
     mockEpub.getImageAsync = jest.fn().mockRejectedValue(new Error('not found'));
 
-    const result = await service.parse('/fake/path/book.epub');
+    const result = await service.parse('test-key');
     expect(result.coverImageBuffer).toBeUndefined();
   });
 
   test('Handles invalid date gracefully', async () => {
     mockEpub.metadata = { date: 'not-a-date' };
-    const result = await service.parse('/fake/path/book.epub');
+    const result = await service.parse('test-key');
     expect(result.publishedYear).toBeUndefined();
   });
 });

@@ -1,5 +1,5 @@
 services:
-  app:
+  homebranch:
     image: node:20
     working_dir: /workspace
     volumes:
@@ -7,8 +7,8 @@ services:
       - node_modules:/workspace/node_modules
     environment:
       DATABASE_HOST: db
-      DATABASE_USERNAME: postgres
-      DATABASE_PASSWORD: postgres
+      DATABASE_USERNAME: homebranch
+      DATABASE_PASSWORD: changeme
       DATABASE_PORT: "5432"
       DATABASE_NAME: homebranch
       NODE_ENV: development
@@ -18,6 +18,8 @@ services:
       JWT_REFRESH_SECRET: dev_refresh_secret_change_me
       REDIS_HOST: redis
       REDIS_PORT: "6379"
+      APP_URL: http://localhost
+      STORAGE_LOCATION: local
     ports:
       - "8080:8080"
     command: sleep infinity
@@ -30,15 +32,27 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: homebranch
+      POSTGRES_PASSWORD: changeme
       POSTGRES_DB: homebranch
-    ports:
-      - "5433:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U homebranch"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  auth-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: auth
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: auth
+    volumes:
+      - auth-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -46,8 +60,6 @@ services:
   redis:
     image: redis:7-alpine
     command: redis-server --appendonly yes
-    ports:
-      - "6379:6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -56,7 +68,36 @@ services:
       timeout: 5s
       retries: 5
 
+  homebranch-web:
+    image: ghcr.io/oghamark/homebranch-web:latest
+    ports:
+      - "80:80"
+    environment:
+      API_BACKEND: http://homebranch:8080
+      AUTH_BACKEND: http://auth:3000
+
+  auth:
+    image: ghcr.io/oghamark/authentication:latest
+    ports:
+      - "3001:3000"
+    environment:
+      DATABASE_HOST: auth-db
+      DATABASE_PORT: "5432"
+      DATABASE_USERNAME: auth
+      DATABASE_PASSWORD: changeme
+      DATABASE_NAME: auth
+      JWT_ACCESS_SECRET: dev_access_secret_change_me
+      JWT_REFRESH_SECRET: dev_refresh_secret_change_me
+      SESSION_SECRET: your-session-secret-here
+      APP_URL: http://localhost
+      CORS_ORIGIN: "*"
+      PORT: "3000"
+    depends_on:
+      auth-db:
+        condition: service_healthy
+
 volumes:
   node_modules:
   postgres-data:
+  auth-data:
   redis-data:

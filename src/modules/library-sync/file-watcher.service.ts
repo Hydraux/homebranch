@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/commo
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import * as chokidar from 'chokidar';
-import { basename, join } from 'path';
+import { basename, join, relative } from 'path';
 import { Interval } from '@nestjs/schedule';
 import { isSupportedBookFile } from 'src/modules/book/format/book-format';
 
@@ -91,23 +91,29 @@ export class FileWatcherService implements OnModuleInit, OnModuleDestroy {
     this.logger.log(`File removed: ${filePath}`);
 
     const fileName = basename(filePath);
+    const storageKey = this.toStorageKey(filePath);
     await this.libraryScanQueue.add(
       'file-removed',
-      { fileName, filePath },
+      { fileName, filePath: storageKey },
       { removeOnComplete: 100, removeOnFail: 50 },
     );
   }
 
   private async enqueueFileProcessing(filePath: string, event: string) {
     const fileName = basename(filePath);
+    const storageKey = this.toStorageKey(filePath);
     await this.libraryScanQueue.add(
       'process-file',
-      { fileName, filePath, event },
+      { fileName, filePath: storageKey, event },
       {
         jobId: `process-${fileName}-${Date.now()}`,
         removeOnComplete: 100,
         removeOnFail: 50,
       },
     );
+  }
+
+  private toStorageKey(filePath: string): string {
+    return join('books', relative(this.booksDirectory, filePath)).replace(/\\/g, '/');
   }
 }

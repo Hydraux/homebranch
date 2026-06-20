@@ -10,9 +10,10 @@ import { AuthModule } from 'src/modules/auth/auth.module';
 import { SettingsModule } from 'src/modules/settings/settings.module';
 import { BookCoreModule } from 'src/modules/book/book-core.module';
 import { QueueModule } from 'src/modules/queue/queue.module';
+import { StorageModule } from '../storage/storage.module';
 
 @Module({
-  imports: [BookCoreModule, AuthModule, SettingsModule, QueueModule],
+  imports: [BookCoreModule, AuthModule, SettingsModule, QueueModule, StorageModule],
   providers: [
     LibraryEventsService,
     LibrarySyncService,

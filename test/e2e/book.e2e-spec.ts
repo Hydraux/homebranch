@@ -85,6 +85,7 @@ describe('BookController (e2e)', () => {
 
     const response = await request(app.getHttpServer()).get('/books').expect(200);
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(response.body.total).toBe(1);
     expect(mockBookService.getBooks).toHaveBeenCalledWith(expect.objectContaining({ viewerUserId: 'user-123' }));
   });
@@ -100,6 +101,7 @@ describe('BookController (e2e)', () => {
 
     const response = await request(app.getHttpServer()).get('/books/favorite').expect(200);
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(response.body.total).toBe(1);
     expect(mockBookService.getFavoriteBooks).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user-123' }));
   });
@@ -109,6 +111,7 @@ describe('BookController (e2e)', () => {
 
     const response = await request(app.getHttpServer()).put('/books/book-1/favorite').expect(200);
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(response.body.isFavorite).toBe(true);
     expect(mockBookService.toggleFavorite).toHaveBeenCalledWith('user-123', 'book-1');
   });
@@ -118,6 +121,7 @@ describe('BookController (e2e)', () => {
 
     const response = await request(app.getHttpServer()).get(`/books/${mockBook.id}`).expect(200);
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(response.body.id).toBe(mockBook.id);
     expect(mockBookService.getBookById).toHaveBeenCalledWith(mockBook.id, 'user-123');
   });
@@ -132,6 +136,7 @@ describe('BookController (e2e)', () => {
       .attach('file', Buffer.from('epub'), 'test-book.epub')
       .expect(201);
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(response.body.id).toBe(mockBook.id);
     expect(mockBookCreationService.createBook).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -153,6 +158,7 @@ describe('BookController (e2e)', () => {
       .attach('file', Buffer.from('epub'), 'test-book.epub')
       .expect(201);
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     expect(response.body).toEqual({ skipped: true, existingBook: expect.objectContaining({ id: mockBook.id }) });
   });
 

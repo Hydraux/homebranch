@@ -5,11 +5,11 @@ import {
   Injectable,
   NotFoundException,
   Logger,
+  Inject,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { join } from 'path';
 import { BookFormatProcessingService } from 'src/modules/book/format/book-format-processing.service';
-import { FileService } from 'src/modules/book/format/file.service';
 import { UpdateBookRequest } from 'src/modules/book/dto/update-book-request';
 import { fillBookMetadataFromFileName } from 'src/modules/book/format/book-file-metadata';
 import { Book, copyBook } from 'src/modules/book/book.model';
@@ -23,6 +23,7 @@ import { getAvailableBookFormatsFromBook, getPreferredBookFormat } from 'src/mod
 import { BookFileMetadata } from 'src/modules/book/format/book-file-metadata.interface';
 import { FileProcessingQueueService } from 'src/modules/queue/file-processing-queue.service';
 import { BookPersistenceService } from 'src/modules/book/persistence/book.persistence';
+import { IStorageService, STORAGE_SERVICE_TOKEN } from '../../storage/storage.interface';
 
 export interface LinkBooksRequest {
   targetBookId: string;
@@ -45,8 +46,9 @@ export class BookMutationService {
   constructor(
     private readonly bookPersistenceService: BookPersistenceService,
     private readonly fileProcessingQueue: FileProcessingQueueService,
-    private readonly fileService: FileService,
     private readonly bookFormatProcessingService: BookFormatProcessingService,
+
+    @Inject(STORAGE_SERVICE_TOKEN) private readonly storage: IStorageService,
   ) {}
 
   async updateBook(request: UpdateBookRequest): Promise<Book> {
@@ -57,11 +59,10 @@ export class BookMutationService {
     });
 
     const updatedBook = await this.bookPersistenceService.updateBookRecord(request.id, book);
-    const uploadsDir = process.env.UPLOADS_DIRECTORY || './uploads';
     await this.fileProcessingQueue.enqueueMetadataSync(
       request.id,
       updatedBook.fileName,
-      `${uploadsDir}/books/${updatedBook.fileName}`,
+      `books/${updatedBook.fileName}`,
       { jobId: `sync-${request.id}` },
     );
 
@@ -212,8 +213,7 @@ export class BookMutationService {
   }
 
   private async parseFileMetadata(format: BookFormatEntity): Promise<BookFileMetadata> {
-    const uploadsDirectory = process.env.UPLOADS_DIRECTORY || './uploads';
-    const filePath = join(uploadsDirectory, 'books', format.fileName);
+    const filePath = join('books', format.fileName);
 
     try {
       return await this.bookFormatProcessingService.parseMetadata(filePath, format.format);
@@ -228,10 +228,9 @@ export class BookMutationService {
       return undefined;
     }
 
-    const uploadsDirectory = process.env.UPLOADS_DIRECTORY || './uploads';
     const coverFileName = `${randomUUID()}.jpg`;
-    const coverPath = join(uploadsDirectory, 'cover-images', coverFileName);
-    await this.fileService.writeFile(coverPath, fileMetadata.coverImageBuffer);
+    const coverPath = join('cover-images', coverFileName);
+    await this.storage.uploadFile(fileMetadata.coverImageBuffer, { key: coverPath, mimeType: 'image/jpeg' });
     return coverFileName;
   }
 }

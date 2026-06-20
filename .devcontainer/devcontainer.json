@@ -1,11 +1,12 @@
 {
   "name": "homebranch",
   "dockerComposeFile": "docker-compose.yml",
-  "service": "app",
+  "service": "homebranch",
   "workspaceFolder": "/workspace",
-  "forwardPorts": [8080],
+  "forwardPorts": [8080, 80],
   "portsAttributes": {
-    "8080": { "label": "API" }
+    "8080": { "label": "API" },
+    "80": {"label": "UI"}
   },
   "postCreateCommand": "npm install"
 }

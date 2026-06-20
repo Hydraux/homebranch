@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import * as AdmZip from 'adm-zip';
 import { basename, join, posix } from 'path';
 import { Book } from 'src/modules/book/book.model';
+import { EpubArchiveCacheService } from 'src/modules/book/publication/epub-archive-cache.service';
 
 interface ManifestItem {
   id: string;
@@ -24,10 +24,11 @@ interface TocEntry {
 export class EpubManifestService {
   private readonly logger = new Logger(EpubManifestService.name);
 
-  generateManifest(book: Book, baseUrl: string): object {
-    const uploadsDirectory = process.env.UPLOADS_DIRECTORY || './uploads';
-    const epubPath = join(uploadsDirectory, 'books', basename(book.fileName));
-    const zip = new AdmZip(epubPath);
+  constructor(private readonly epubArchiveCache: EpubArchiveCacheService) {}
+
+  async generateManifest(book: Book, baseUrl: string): Promise<object> {
+    const epubPath = join('books', basename(book.fileName));
+    const zip = await this.epubArchiveCache.getArchive(epubPath);
 
     const containerXml = zip.readAsText('META-INF/container.xml');
     const opfRelPath = this.extractOpfPath(containerXml);

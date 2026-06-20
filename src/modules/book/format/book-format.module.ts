@@ -7,18 +7,17 @@ import { EpubParserService } from 'src/modules/book/format/epub-parser.service';
 import { EpubMetadataWriterService } from 'src/modules/book/format/epub-metadata-writer.service';
 import { PdfParserService } from 'src/modules/book/format/pdf-parser.service';
 import { ContentHashService } from 'src/modules/book/format/content-hash.service';
-import { FileService } from 'src/modules/book/format/file.service';
+import { StorageModule } from '../../storage/storage.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([BookEntity, BookFormatEntity])],
+  imports: [TypeOrmModule.forFeature([BookEntity, BookFormatEntity]), StorageModule],
   providers: [
     EpubParserService,
     PdfParserService,
     EpubMetadataWriterService,
     BookFormatProcessingService,
     ContentHashService,
-    FileService,
   ],
-  exports: [BookFormatProcessingService, ContentHashService, FileService],
+  exports: [BookFormatProcessingService, ContentHashService],
 })
 export class BookFormatModule {}

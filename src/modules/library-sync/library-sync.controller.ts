@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, Param, Post, Query, Sse, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, Logger, Param, Post, Query, Sse, UseGuards } from '@nestjs/common';
 import { IsArray, IsOptional, IsUUID } from 'class-validator';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/common/guards/roles.guard';
@@ -22,6 +22,8 @@ class OrphanedBooksDto {
 
 @Controller('library')
 export class LibrarySyncController {
+  private readonly logger: Logger = new Logger(LibrarySyncController.name);
+
   constructor(
     private readonly librarySyncService: LibrarySyncService,
     private readonly libraryEventsService: LibraryEventsService,
@@ -37,6 +39,7 @@ export class LibrarySyncController {
   @Post('scan')
   @UseGuards(JwtAuthGuard)
   async triggerScan() {
+    this.logger.log('Trigger Library Sync Scan Request Received');
     return this.librarySyncService.triggerScan();
   }
 

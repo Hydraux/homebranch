@@ -1,9 +1,8 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { basename, join } from 'path';
+import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
+import { basename, join, extname } from 'path';
 import { CreateBookRequest } from 'src/modules/book/dto/create-book-request';
 import { CompositeMetadataGateway } from 'src/modules/book/metadata/gateways/composite-metadata.gateway';
 import { ContentHashService } from 'src/modules/book/format/content-hash.service';
-import { FileService } from 'src/modules/book/format/file.service';
 import { BookFormatProcessingService } from 'src/modules/book/format/book-format-processing.service';
 import { fillBookMetadataFromFileName } from 'src/modules/book/format/book-file-metadata';
 import { buildBookFormatMetadata } from 'src/modules/book/format/book-format-metadata';
@@ -20,6 +19,9 @@ import { BookDuplicateRegistrationService } from 'src/modules/book/deduplication
 import { BookFileMetadata } from 'src/modules/book/format/book-file-metadata.interface';
 import { randomUUID } from 'crypto';
 import { BookPersistenceService } from 'src/modules/book/persistence/book.persistence';
+import { IStorageService, STORAGE_SERVICE_TOKEN } from '../../storage/storage.interface';
+import { unlink } from 'fs-extra';
+import { tmpdir } from 'os';
 
 export type CreateBookResponse = Book | { skipped: true; existingBook: Book };
 
@@ -31,20 +33,34 @@ export class BookCreationService {
     private readonly duplicateRegistrationService: BookDuplicateRegistrationService,
     private readonly metadataGateway: CompositeMetadataGateway,
     private readonly contentHashService: ContentHashService,
-    private readonly fileService: FileService,
     private readonly bookFormatProcessingService: BookFormatProcessingService,
     private readonly bookPersistenceService: BookPersistenceService,
+
+    @Inject(STORAGE_SERVICE_TOKEN)
+    private readonly storage: IStorageService,
   ) {}
 
   async createBook(dto: CreateBookRequest): Promise<CreateBookResponse> {
-    const uploadsDirectory = process.env.UPLOADS_DIRECTORY || './uploads';
-    const incomingPath = join(uploadsDirectory, 'incoming', basename(dto.fileName));
+    if (!dto.filePath) {
+      throw new BadRequestException('A file must be provided');
+    }
 
-    const enrichedDto = { ...dto };
-    const detectedFormat = detectBookFormatFromFileName(dto.fileName);
+    const originalFileName = basename(dto.filePath);
+    const detectedFormat = detectBookFormatFromFileName(originalFileName);
     if (!detectedFormat) {
       this.throwMissingMetadata('format');
     }
+
+    const extension = extname(originalFileName).toLowerCase();
+    const tempFileName = `${randomUUID()}${extension}`;
+    const incomingPath = join('incoming', tempFileName);
+
+    await this.storage.uploadFileFromPath(dto.filePath, {
+      key: incomingPath,
+      mimeType: 'application/octet-stream',
+    });
+
+    const enrichedDto: Partial<CreateBookRequest> & { originalFileName: string } = { ...dto, originalFileName };
 
     let parsedSummary: string | undefined;
     let extractedCoverFileName: string | undefined;
@@ -71,21 +87,34 @@ export class BookCreationService {
 
       if (!enrichedDto.coverImageFileName && fileMetadata.coverImageBuffer) {
         const coverFileName = `${randomUUID()}.jpg`;
-        const coverPath = join(uploadsDirectory, 'cover-images', coverFileName);
-        await this.fileService.writeFile(coverPath, fileMetadata.coverImageBuffer);
+        await this.storage.uploadFile(fileMetadata.coverImageBuffer, {
+          key: `cover-images/${coverFileName}`,
+          mimeType: 'image/jpeg',
+        });
         enrichedDto.coverImageFileName = coverFileName;
         extractedCoverFileName = coverFileName;
       }
     } catch (error) {
-      this.logger.warn(`Could not parse file metadata for "${dto.fileName}": ${String(error)}`);
+      this.logger.warn(`Could not parse file metadata for "${originalFileName}": ${String(error)}`);
     }
 
-    fillBookMetadataFromFileName(enrichedDto, dto.originalFileName ?? dto.fileName);
+    if (dto.coverImagePath && !enrichedDto.coverImageFileName) {
+      const coverFileName = `${randomUUID()}.jpg`;
+      await this.storage.uploadFileFromPath(dto.coverImagePath, {
+        key: `cover-images/${coverFileName}`,
+        mimeType: 'image/jpeg',
+      });
+      enrichedDto.coverImageFileName = coverFileName;
+    }
+
+    fillBookMetadataFromFileName(enrichedDto, originalFileName);
 
     if (!enrichedDto.title) {
+      await this.deleteIncomingFiles(tempFileName, enrichedDto.coverImageFileName, extractedCoverFileName);
       this.throwMissingMetadata('title');
     }
     if (!enrichedDto.author) {
+      await this.deleteIncomingFiles(tempFileName, enrichedDto.coverImageFileName, extractedCoverFileName);
       this.throwMissingMetadata('author');
     }
 
@@ -97,12 +126,12 @@ export class BookCreationService {
       existingByHash &&
       metadataMatches(existingByHash, { title: enrichedDto.title, author: enrichedDto.author, isbn: enrichedDto.isbn })
     ) {
-      await this.deleteIncomingFiles(uploadsDirectory, dto.fileName, dto.coverImageFileName, extractedCoverFileName);
+      await this.deleteIncomingFiles(tempFileName, enrichedDto.coverImageFileName, extractedCoverFileName);
       return { skipped: true, existingBook: existingByHash };
     }
 
     if (preferredBook?.formats?.some((format) => format.format === detectedFormat)) {
-      await this.deleteIncomingFiles(uploadsDirectory, dto.fileName, dto.coverImageFileName, extractedCoverFileName);
+      await this.deleteIncomingFiles(tempFileName, enrichedDto.coverImageFileName, extractedCoverFileName);
       return { skipped: true, existingBook: preferredBook };
     }
 
@@ -111,14 +140,14 @@ export class BookCreationService {
       enrichedDto.title,
       getBookFormatExtension(detectedFormat),
     );
-    const finalFileName = this.resolveUniqueFileName(uploadsDirectory, desiredFileName);
+    const finalFileName = await this.resolveUniqueFileName(desiredFileName);
     enrichedDto.fileName = finalFileName;
     const newFormat = Object.assign(new BookFormatEntity(), {
       id: randomUUID(),
       format: detectedFormat,
       fileName: finalFileName,
       fileContentHash: contentHash,
-      ...buildBookFormatMetadata(fileMetadata, dto.originalFileName ?? dto.fileName, enrichedDto.coverImageFileName),
+      ...buildBookFormatMetadata(fileMetadata, originalFileName, enrichedDto.coverImageFileName),
     });
 
     if (preferredBook) {
@@ -145,7 +174,7 @@ export class BookCreationService {
       });
 
       const persistedBook = await this.bookPersistenceService.updateBookRecord(preferredBook.id, updatedBook);
-      await this.fileService.moveFile(incomingPath, join(uploadsDirectory, 'books', finalFileName));
+      await this.storage.moveFile(incomingPath, join('books', finalFileName));
       return persistedBook;
     }
 
@@ -181,7 +210,7 @@ export class BookCreationService {
 
     const createdBook = await this.bookPersistenceService.createBookRecord(book);
 
-    await this.fileService.moveFile(incomingPath, join(uploadsDirectory, 'books', finalFileName));
+    await this.storage.moveFile(incomingPath, join('books', finalFileName));
 
     if (existingByHash) {
       await this.duplicateRegistrationService.flagPotentialDuplicate(createdBook.id, existingByHash.id);
@@ -199,23 +228,28 @@ export class BookCreationService {
   }
 
   private async deleteIncomingFiles(
-    uploadsDirectory: string,
     uploadedFileName: string,
     uploadedCoverFileName?: string,
     extractedCoverFileName?: string,
   ): Promise<void> {
     const filesToDelete = [
-      join(uploadsDirectory, 'incoming', basename(uploadedFileName)),
-      uploadedCoverFileName ? join(uploadsDirectory, 'cover-images', basename(uploadedCoverFileName)) : null,
-      extractedCoverFileName ? join(uploadsDirectory, 'cover-images', basename(extractedCoverFileName)) : null,
-    ].filter((filePath): filePath is string => filePath !== null && this.fileService.fileExists(filePath));
+      join('incoming', basename(uploadedFileName)),
+      uploadedCoverFileName ? join('cover-images', basename(uploadedCoverFileName)) : null,
+      extractedCoverFileName ? join('cover-images', basename(extractedCoverFileName)) : null,
+    ].filter((filePath): filePath is string => filePath !== null);
 
-    await Promise.all(filesToDelete.map((filePath) => this.fileService.deleteFile(filePath)));
+    await Promise.all(filesToDelete.map((filePath) => this.storage.deleteFile(filePath)));
+    if (uploadedFileName) {
+      await unlink(join(tmpdir(), 'uploads', uploadedFileName)).catch(() => {});
+    }
+    if (uploadedCoverFileName) {
+      await unlink(join(tmpdir(), 'uploads', uploadedCoverFileName)).catch(() => {});
+    }
   }
 
-  private resolveUniqueFileName(uploadsDirectory: string, desiredFileName: string): string {
-    const booksDir = join(uploadsDirectory, 'books');
-    if (!this.fileService.fileExists(join(booksDir, desiredFileName))) {
+  private async resolveUniqueFileName(desiredFileName: string): Promise<string> {
+    const exists = await this.storage.exists(join('books', desiredFileName));
+    if (!exists) {
       return desiredFileName;
     }
 
@@ -224,7 +258,7 @@ export class BookCreationService {
     const nameWithoutExt = extensionIndex >= 0 ? desiredFileName.slice(0, extensionIndex) : desiredFileName;
     let counter = 2;
     let candidate = `${nameWithoutExt} (${counter})${ext}`;
-    while (this.fileService.fileExists(join(booksDir, candidate))) {
+    while (await this.storage.exists(join('books', candidate))) {
       counter++;
       candidate = `${nameWithoutExt} (${counter})${ext}`;
     }
