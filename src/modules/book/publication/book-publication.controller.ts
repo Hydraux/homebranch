@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Inject,
+  Logger,
   NotFoundException,
   Param,
   Query,
@@ -32,6 +33,8 @@ class BookFormatQueryDto {
 
 @Controller('books')
 export class BookPublicationController {
+  private readonly logger = new Logger(BookPublicationController.name);
+
   constructor(
     private readonly bookPublicationService: BookPublicationService,
     private readonly bookService: BookService,
@@ -53,15 +56,18 @@ export class BookPublicationController {
   }
 
   @Get(':id/content/*path')
+  @Get(':id/content/:path(*)')
   @UseGuards(JwtAuthGuard)
   async getBookContent(
     @Param('id') id: string,
+    @Param('path') path: string | undefined,
     @Query() query: BookFormatQueryDto,
     @Req() req: Request,
     @Res() response: Response,
   ): Promise<void> {
-    const rawPath = req.url.split(`/content/`)[1]?.split('?')[0] ?? '';
+    const rawPath = path ?? req.url.split(`/content/`)[1]?.split('?')[0] ?? '';
     const entryPath = rawPath.split('/').map(decodeURIComponent).join('/');
+    this.logger.log(`Serving content request for book "${id}" and path "${entryPath}"`);
     const { data, mediaType } = await this.bookPublicationService.getContent(id, entryPath, query.format);
     response.setHeader('Content-Type', mediaType);
     response.setHeader('Cache-Control', 'private, max-age=3600');

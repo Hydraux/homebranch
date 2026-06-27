@@ -4,7 +4,9 @@ import { BookPublicationController } from 'src/modules/book/publication/book-pub
 import { BookFormatType } from 'src/modules/book/format/book-format-type.enum';
 
 describe('BookPublicationController', () => {
-  const publicationService = {};
+  const publicationService = {
+    getContent: jest.fn(),
+  };
   const bookService = {
     getDownload: jest.fn(),
   };
@@ -12,6 +14,8 @@ describe('BookPublicationController', () => {
     getFileStream: jest.fn(),
   };
   const response = {
+    setHeader: jest.fn(),
+    send: jest.fn(),
     status: jest.fn().mockReturnThis(),
     json: jest.fn(),
   };
@@ -63,5 +67,32 @@ describe('BookPublicationController', () => {
       error: 'BOOK_FILE_NOT_FOUND',
       message: 'Book file not found on server',
     });
+  });
+
+  it('uses the wildcard path param for content requests', async () => {
+    const html = Buffer.from('<h1>chapter</h1>');
+    publicationService.getContent.mockResolvedValue({ data: html, mediaType: 'text/html' });
+    const controller = new BookPublicationController(
+      publicationService as never,
+      bookService as never,
+      storage as never,
+    );
+
+    await controller.getBookContent(
+      'book-1',
+      'OEBPS/6527844133432373027_2-h-0.htm.html',
+      {},
+      { url: '/api/books/book-1/content/ignored-path' } as never,
+      response as never,
+    );
+
+    expect(publicationService.getContent).toHaveBeenCalledWith(
+      'book-1',
+      'OEBPS/6527844133432373027_2-h-0.htm.html',
+      undefined,
+    );
+    expect(response.setHeader).toHaveBeenCalledWith('Content-Type', 'text/html');
+    expect(response.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, max-age=3600');
+    expect(response.send).toHaveBeenCalledWith(html);
   });
 });
