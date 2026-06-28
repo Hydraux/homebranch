@@ -56,12 +56,11 @@ export class BookPublicationController {
   @UseGuards(JwtAuthGuard)
   async getBookContent(
     @Param('id') id: string,
+    @Param('path') path: string[],
     @Query() query: BookFormatQueryDto,
-    @Req() req: Request,
     @Res() response: Response,
   ): Promise<void> {
-    const rawPath = req.url.split(`/content/`)[1]?.split('?')[0] ?? '';
-    const entryPath = rawPath.split('/').map(decodeURIComponent).join('/');
+    const entryPath = path.map(decodeURIComponent).join('/');
     const { data, mediaType } = await this.bookPublicationService.getContent(id, entryPath, query.format);
     response.setHeader('Content-Type', mediaType);
     response.setHeader('Cache-Control', 'private, max-age=3600');
