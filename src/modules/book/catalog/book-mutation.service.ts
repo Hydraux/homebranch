@@ -213,7 +213,7 @@ export class BookMutationService {
   }
 
   private async parseFileMetadata(format: BookFormatEntity): Promise<BookFileMetadata> {
-    const filePath = join('books', format.fileName);
+    const filePath = join('books', format.fileName).replace(/\\/g, '/');
 
     try {
       return await this.bookFormatProcessingService.parseMetadata(filePath, format.format);

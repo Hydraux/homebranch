@@ -3,10 +3,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import * as chokidar from 'chokidar';
 import { basename, join, relative } from 'path';
-import { Interval } from '@nestjs/schedule';
 import { isSupportedBookFile } from 'src/modules/book/format/book-format';
-
-const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 @Injectable()
 export class FileWatcherService implements OnModuleInit, OnModuleDestroy {
@@ -24,6 +21,19 @@ export class FileWatcherService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit() {
+    const storageLocation = (process.env.STORAGE_LOCATION || 'local').toLowerCase();
+    const enableWatcher = (process.env.ENABLE_FILE_WATCHER || 'true').toLowerCase() !== 'false';
+
+    if (storageLocation !== 'local') {
+      this.logger.log(`FileWatcher disabled because STORAGE_LOCATION=${storageLocation}`);
+      return;
+    }
+
+    if (!enableWatcher) {
+      this.logger.log('FileWatcher disabled by ENABLE_FILE_WATCHER=false');
+      return;
+    }
+
     this.logger.log(`Starting file watcher on ${this.booksDirectory}`);
 
     this.watcher = chokidar.watch(this.booksDirectory, {
@@ -56,11 +66,6 @@ export class FileWatcherService implements OnModuleInit, OnModuleDestroy {
       await this.watcher.close();
       this.watcher = null;
     }
-  }
-
-  @Interval(POLL_INTERVAL_MS)
-  async periodicScan() {
-    await this.enqueueScan('periodic');
   }
 
   async enqueueScan(trigger: string) {
